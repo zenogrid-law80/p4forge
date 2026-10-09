@@ -1,0 +1,31 @@
+schema_version = 1
+source_root_id = "09a5f79b-96e7-47be-a022-92a6c0101210"
+workspace = "pipeline"
+stages = ["prepare", "hold", "after"]
+max_parallel_jobs = 1
+[[jobs]]
+name = "prepare"
+stage = "prepare"
+runner = { os = "macos", arch = "aarch64", pool = "default" }
+shell = "sh"
+timeout_seconds = 60
+script = ['test "$(id -u)" = 10003', 'test -f Server/Cargo.toml', 'echo prepared > lifecycle.txt']
+[[jobs]]
+name = "hold"
+stage = "hold"
+runner = { os = "macos", arch = "aarch64", pool = "default" }
+shell = "sh"
+timeout_seconds = 240
+script = [
+  'test "$(cat lifecycle.txt)" = prepared',
+  '''/usr/bin/python3 -c 'import os,time; pid=os.fork(); (os.setsid(),time.sleep(240)) if pid==0 else print("DETACHED_PID="+str(pid),flush=True)' ''',
+  'echo lifecycle-hold-started',
+  'sleep 240',
+]
+[[jobs]]
+name = "after"
+stage = "after"
+runner = { os = "macos", arch = "aarch64", pool = "default" }
+shell = "sh"
+timeout_seconds = 60
+script = ['echo unexpected-after']

@@ -1,0 +1,17 @@
+schema_version = 1
+source_root_id = "09a5f79b-96e7-47be-a022-92a6c0101210"
+workspace = "pipeline"
+stages = ["verify"]
+max_parallel_jobs = 1
+[[jobs]]
+name = "verify-generated-data"
+stage = "verify"
+runner = { os = "macos", arch = "aarch64", pool = "default" }
+shell = "sh"
+timeout_seconds = 60
+script = [
+  'echo "Consuming submitted CL $P4FORGE_CHANGELIST"',
+  'test ! -r /Library/P4Forge/secrets/publisher-tickets',
+  'test ! -r /Library/P4Forge/secrets/publisher.json',
+  '''/usr/bin/python3 -c 'import pathlib,sqlite3,hashlib; p=pathlib.Path("GameDesign/Output/Sqlite/data_table.sqlite"); assert p.is_file(); db=sqlite3.connect("file:"+str(p)+"?mode=ro",uri=True); assert db.execute("pragma integrity_check").fetchone()[0]=="ok"; n=db.execute("select count(*) from sqlite_master where type=char(116,97,98,108,101)").fetchone()[0]; assert n>0; print("SQLite tables:",n,"SHA256:",hashlib.sha256(p.read_bytes()).hexdigest()); sources=list(pathlib.Path("GameDesign/Tools/data_table/data_table/src").rglob("*.rs")); assert sources; print("Rust generated sources:",len(sources))' ''',
+]

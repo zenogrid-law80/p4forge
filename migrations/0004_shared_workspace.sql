@@ -1,0 +1,10 @@
+ALTER TABLE job_runs ADD COLUMN workspace_attempt_id uuid REFERENCES job_attempts(id);
+ALTER TABLE job_runs ADD COLUMN step_started_at timestamptz;
+ALTER TABLE job_runs ADD COLUMN step_finished_at timestamptz;
+ALTER TABLE job_runs ADD COLUMN step_exit_code integer;
+ALTER TABLE job_runs ADD COLUMN step_reason text NOT NULL DEFAULT '';
+ALTER TABLE job_runs ADD COLUMN step_start_hash text;
+ALTER TABLE job_runs ADD COLUMN step_completion_hash text;
+CREATE INDEX workspace_jobs ON job_runs(workspace_attempt_id) WHERE workspace_attempt_id IS NOT NULL;
+ALTER TABLE agents DROP CONSTRAINT agents_os_check;
+ALTER TABLE agents ADD CONSTRAINT agents_os_check CHECK (os IN ('linux','windows'));

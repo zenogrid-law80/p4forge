@@ -1,0 +1,12 @@
+[package]
+name = "p4forge-protocol"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+p4forge-domain = { path = "../domain" }
+p4forge-perforce = { path = "../perforce" }
+serde.workspace = true
+uuid.workspace = true

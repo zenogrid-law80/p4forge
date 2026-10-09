@@ -1,0 +1,213 @@
+schema_version = 1
+
+[[pipelines]]
+name = "data-table-generate"
+category = "server"
+runner_os = "macos"
+runner_arch = "aarch64"
+needs = []
+changes = [
+    "GameDesign/Data/**",
+    "GameDesign/Enum/**",
+    "GameDesign/Protos/**",
+]
+working_directory = "."
+stages = [
+    "generate",
+    "publish",
+]
+workspace = "pipeline"
+max_parallel_jobs = 1
+
+[[pipelines.jobs]]
+name = "data-table-generate"
+stage = "generate"
+needs = []
+script = ["cargo run -p data_table_gen_v2 --manifest-path GameDesign/Tools/Cargo.toml -- --sqlite --rust"]
+timeout_seconds = 600
+
+[[pipelines.jobs]]
+name = "publish-generated-data"
+stage = "publish"
+needs = []
+script = ['python3 "${P4FORGE_PUBLISH_TOOL:?set the installed p4-publish.py path}" GameDesign/Tools/data_table/data_table/src/... GameDesign/Output/Sqlite/...']
+timeout_seconds = 120
+
+[[pipelines]]
+name = "client-editor-build"
+category = "client"
+runner_os = "windows"
+runner_arch = "x86_64"
+needs = []
+checkout_view = "ClientBuildView"
+changes = ["Client/**"]
+working_directory = "Client"
+stages = ["build"]
+workspace = "pipeline"
+max_parallel_jobs = 1
+
+[[pipelines.jobs]]
+name = "build-client-editor"
+stage = "build"
+needs = []
+script = ["./ci.ps1"]
+timeout_seconds = 1800
+
+[[pipelines]]
+name = "client-windows-package"
+category = "client"
+runner_os = "windows"
+runner_arch = "x86_64"
+needs = []
+checkout_view = "ClientBuildView"
+changes = ["Client/**"]
+working_directory = "Client"
+stages = ["package"]
+workspace = "pipeline"
+max_parallel_jobs = 1
+
+[[pipelines.jobs]]
+name = "package-client-windows"
+stage = "package"
+needs = []
+script = ["./ci/package-windows.ps1"]
+timeout_seconds = 1800
+
+[[pipelines]]
+name = "client-android-googleplay-package"
+category = "client"
+runner_os = "macos"
+runner_arch = "aarch64"
+needs = []
+checkout_view = "ClientBuildView"
+changes = ["Client/**"]
+working_directory = "Client"
+stages = ["package"]
+workspace = "pipeline"
+max_parallel_jobs = 1
+
+[[pipelines.jobs]]
+name = "package-client-android-googleplay"
+stage = "package"
+needs = []
+script = ["sh ./ci/package-android-googleplay.sh"]
+timeout_seconds = 1800
+
+[[pipelines]]
+name = "client-ios-package"
+category = "client"
+runner_os = "macos"
+runner_arch = "aarch64"
+needs = []
+checkout_view = "ClientBuildView"
+changes = ["Client/**"]
+working_directory = "Client"
+stages = ["package"]
+workspace = "pipeline"
+max_parallel_jobs = 1
+
+[[pipelines.jobs]]
+name = "package-client-ios"
+stage = "package"
+needs = []
+script = ["sh ./ci/package-ios.sh"]
+timeout_seconds = 1800
+
+[[pipelines]]
+name = "server"
+category = "server"
+runner_os = "macos"
+runner_arch = "aarch64"
+needs = ["data-table-generate"]
+checkout_view = "ServerBuildView"
+changes = [
+    "Server/**",
+    "GameDesign/Tools/data_table/data_table/src/**",
+]
+working_directory = "Server"
+stages = [
+    "check",
+    "test",
+    "build",
+    "publish",
+]
+workspace = "pipeline"
+max_parallel_jobs = 1
+
+[[pipelines.jobs]]
+name = "format"
+stage = "check"
+needs = []
+script = ["cargo fmt --check"]
+timeout_seconds = 60
+
+[[pipelines.jobs]]
+name = "unit-tests"
+stage = "test"
+needs = []
+script = ["cargo test"]
+timeout_seconds = 300
+
+[[pipelines.jobs]]
+name = "docker-build"
+stage = "build"
+needs = []
+script = ['docker buildx build --platform linux/amd64 --load --tag "server:${P4FORGE_CHANGELIST}" .']
+timeout_seconds = 600
+
+[[pipelines.jobs]]
+name = "publish-server-ecr"
+stage = "publish"
+needs = []
+script = [
+    ': "${ECR_ACCESS_KEY_ID:?ECR_ACCESS_KEY_ID is required}"',
+    ': "${ECR_ACCESS_KEY:?ECR_ACCESS_KEY is required}"',
+    ': "${ECR_REGION:?ECR_REGION is required}"',
+    "command -v aws >/dev/null",
+    'export AWS_ACCESS_KEY_ID="$ECR_ACCESS_KEY_ID"',
+    'export AWS_SECRET_ACCESS_KEY="$ECR_ACCESS_KEY"',
+    'export AWS_DEFAULT_REGION="$ECR_REGION"',
+    'ECR_ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"',
+    'ECR_REGISTRY="${ECR_ACCOUNT_ID}.dkr.ecr.${ECR_REGION}.amazonaws.com"',
+    'ECR_IMAGE="${ECR_REGISTRY}/server"',
+    'if ! aws ecr describe-repositories --repository-names server --region "$ECR_REGION" >/dev/null 2>&1; then aws ecr create-repository --repository-name server --region "$ECR_REGION" >/dev/null; fi',
+    'aws ecr get-login-password --region "$ECR_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"',
+    'docker tag "server:${P4FORGE_CHANGELIST}" "${ECR_IMAGE}:${P4FORGE_CHANGELIST}"',
+    'docker tag "server:${P4FORGE_CHANGELIST}" "${ECR_IMAGE}:latest"',
+    'docker push "${ECR_IMAGE}:${P4FORGE_CHANGELIST}"',
+    'docker push "${ECR_IMAGE}:latest"',
+]
+timeout_seconds = 300
+
+[[pipelines]]
+name = "server-windows-build"
+category = "server"
+runner_os = "windows"
+runner_arch = "x86_64"
+needs = ["data-table-generate"]
+checkout_view = "ServerBuildView"
+changes = [
+    "Server/**",
+    "GameDesign/Tools/data_table/data_table/src/**",
+]
+working_directory = "."
+stages = [
+    "build",
+    "publish",
+]
+workspace = "pipeline"
+max_parallel_jobs = 1
+
+[[pipelines.jobs]]
+name = "build-windows-executables"
+stage = "build"
+needs = []
+script = ["& ./Server/ci/build-windows-server.ps1"]
+timeout_seconds = 1200
+
+[[pipelines.jobs]]
+name = "publish-windows-executables"
+stage = "publish"
+needs = []
+script = ["if (-not $env:P4FORGE_PUBLISH_TOOL) { throw 'Set P4FORGE_PUBLISH_TOOL to the installed p4-publish.py path' }; python $env:P4FORGE_PUBLISH_TOOL GameDesign/LocalServer/bin/...; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }"]
+timeout_seconds = 120

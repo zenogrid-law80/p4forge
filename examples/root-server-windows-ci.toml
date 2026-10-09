@@ -1,0 +1,137 @@
+# Executable CI projection of root server-windows-build.
+# Publishing executables back to Perforce remains in the original configuration draft.
+# The data-table-publish pipeline starts this pinned revision using its submitted CL.
+# Rust is isolated in the attempt HOME; it is cleaned with the workspace.
+schema_version = 1
+source_root_id = "1fd3eca5-0fd3-406f-b453-f8bebfda51ff"
+workspace = "pipeline"
+max_parallel_jobs = 1
+stages = ["prepare", "test", "build", "verify"]
+
+# Exact checkout-relative files; published only after every job and upload succeeds.
+[[artifacts]]
+name = "api_server.exe"
+path = "GameDesign/LocalServer/bin/api_server.exe"
+
+[[artifacts]]
+name = "config_server.exe"
+path = "GameDesign/LocalServer/bin/config_server.exe"
+
+[[artifacts]]
+name = "manifest.json"
+path = "GameDesign/LocalServer/bin/manifest.json"
+
+[[jobs]]
+name = "prepare-tools"
+stage = "prepare"
+shell = "power_shell"
+working_directory = "."
+timeout_seconds = 900
+runner = { os = "windows", arch = "x86_64", pool = "default" }
+script = [
+'''
+if (!(Test-Path Server/Cargo.toml) -or (Test-Path Client)) { throw 'Unexpected ServerBuildView layout' }
+if (!(Test-Path GameDesign/Output/Sqlite/data_table.sqlite)) { throw 'Generated SQLite is missing' }
+if (!(Get-ChildItem GameDesign/Tools/data_table/data_table/src -Filter *.rs -Recurse)) { throw 'Generated Rust sources are missing' }
+Write-Output ('Building submitted CL ' + $env:P4FORGE_CHANGELIST)
+Write-Output ('Build identity: ' + [Security.Principal.WindowsIdentity]::GetCurrent().Name)
+if ($env:P4TICKETS -or $env:P4FORGE_AGENT_TOKEN_FILE) { throw 'Supervisor credential leaked' }
+@'
+$buildHome = $env:HOME
+if ($buildHome.StartsWith('\\?\')) { $buildHome = $buildHome.Substring(4) }
+$env:CARGO_HOME = Join-Path $buildHome 'cargo'
+$env:RUSTUP_HOME = Join-Path $buildHome 'rustup'
+$env:RUSTUP_TOOLCHAIN = '1.90.0-x86_64-pc-windows-msvc'
+$env:PATH = (Join-Path $env:CARGO_HOME 'bin') + ';' + $env:PATH
+$vcvars = 'C:\Program Files\Microsoft Visual Studio\18\Community\VC\Auxiliary\Build\vcvars64.bat'
+if (!(Test-Path -LiteralPath $vcvars)) { throw 'Expected machine MSVC toolchain is missing' }
+$env:ComSpec = Join-Path $env:SystemRoot 'System32\cmd.exe'
+$env:VSCMD_SKIP_SENDTELEMETRY = '1'
+$env:PATHEXT = '.COM;.EXE;.BAT;.CMD'
+$env:WINDIR = $env:SystemRoot
+$env:OS = 'Windows_NT'
+$cmd = 'call "' + $vcvars + '" >nul && set'
+$vars = & $env:ComSpec /d /s /c $cmd
+if ($LASTEXITCODE -ne 0) { throw 'MSVC environment setup failed' }
+foreach ($line in $vars) {
+    if ($line -match '^([^=]+)=(.*)$') { [Environment]::SetEnvironmentVariable($matches[1], $matches[2], 'Process') }
+}
+'@ | Set-Content -LiteralPath p4forge-tools.ps1 -Encoding UTF8
+. .\p4forge-tools.ps1
+$installer = Join-Path $buildHome 'rustup-init.exe'
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$ProgressPreference = 'SilentlyContinue'
+Invoke-WebRequest -UseBasicParsing -Uri 'https://static.rust-lang.org/rustup/archive/1.28.2/x86_64-pc-windows-msvc/rustup-init.exe' -OutFile $installer
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $installer).Hash -ine '88d8258dcf6ae4f7a80c7d1088e1f36fa7025a1cfd1343731b4ee6f385121fc0') { throw 'Rust installer SHA256 mismatch' }
+& $installer -y --no-modify-path --profile minimal --default-host x86_64-pc-windows-msvc --default-toolchain 1.90.0
+if ($LASTEXITCODE -ne 0) { throw 'Isolated Rust installation failed' }
+if (!(Test-Path (Join-Path $env:CARGO_HOME 'bin\cargo.exe'))) { throw 'Rust installer did not create cargo.exe' }
+& (Join-Path $env:CARGO_HOME 'bin\cargo.exe') --version
+if ($LASTEXITCODE -ne 0) { throw 'cargo unavailable' }
+& (Join-Path $env:CARGO_HOME 'bin\rustc.exe') --version
+if ($LASTEXITCODE -ne 0) { throw 'rustc unavailable' }
+
+'''
+]
+
+[[jobs]]
+name = "unit-tests"
+stage = "test"
+shell = "power_shell"
+working_directory = "."
+timeout_seconds = 300
+runner = { os = "windows", arch = "x86_64", pool = "default" }
+script = [
+'''
+. .\p4forge-tools.ps1
+''',
+'''
+cargo test --locked --offline --workspace --manifest-path Server/Cargo.toml
+'''
+]
+
+[[jobs]]
+name = "build-windows-executables"
+stage = "build"
+shell = "power_shell"
+working_directory = "."
+timeout_seconds = 1200
+runner = { os = "windows", arch = "x86_64", pool = "default" }
+script = [
+'''
+. .\p4forge-tools.ps1
+''',
+'''
+& ./Server/ci/build-windows-server.ps1
+'''
+]
+
+[[jobs]]
+name = "verify-executables"
+stage = "verify"
+shell = "power_shell"
+working_directory = "."
+timeout_seconds = 60
+runner = { os = "windows", arch = "x86_64", pool = "default" }
+script = [
+'''
+. .\p4forge-tools.ps1
+$output = 'GameDesign/LocalServer/bin'
+$manifest = @()
+foreach ($name in @('api_server','config_server')) {
+    $path = Join-Path $output ($name + '.exe')
+    $file = Get-Item -LiteralPath $path
+    $bytes = [IO.File]::ReadAllBytes($file.FullName)
+    if ($bytes.Length -lt 64 -or $bytes[0] -ne 77 -or $bytes[1] -ne 90) { throw ('Not a Windows executable: ' + $name) }
+    $outputText = & $file.FullName
+    Write-Output ($name + ' output: ' + ($outputText -join ' '))
+    if ($LASTEXITCODE -ne 0 -or ($outputText -join ' ') -notmatch '2 \+ 3 = 5') { throw ('Executable smoke test failed: ' + $name) }
+    $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash.ToLowerInvariant()
+    Write-Output ($name + '.exe size=' + $file.Length + ' sha256=' + $hash)
+    $manifest += [ordered]@{name=($name+'.exe');size=$file.Length;sha256=$hash;changelist=$env:P4FORGE_CHANGELIST}
+}
+$manifest | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $output 'manifest.json') -Encoding UTF8
+Write-Output 'Both Windows executables built and smoke-tested successfully'
+
+'''
+]

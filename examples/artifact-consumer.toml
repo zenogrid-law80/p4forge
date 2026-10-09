@@ -1,0 +1,14 @@
+schema_version = 1
+# Replace with a source root on the producer's Perforce connection.
+source_root_id = "00000000-0000-0000-0000-000000000001"
+workspace = "pipeline"
+max_parallel_jobs = 1
+stages = ["verify"]
+artifact_inputs = ["output.bin"]
+
+[[jobs]]
+name = "verify-input"
+stage = "verify"
+shell = "sh"
+runner = { os = "linux", arch = "x86_64" }
+script = ["test -r \"$P4FORGE_INPUTS/output.bin\"", "test ! -w \"$P4FORGE_INPUTS/output.bin\"", "sha256sum \"$P4FORGE_INPUTS/output.bin\""]

@@ -1,0 +1,30 @@
+[package]
+name = "p4forge-agent"
+version = "0.1.6"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+p4forge-domain = { path = "../domain" }
+p4forge-perforce = { path = "../perforce" }
+p4forge-protocol = { path = "../protocol" }
+anyhow.workspace = true
+base64.workspace = true
+clap.workspace = true
+libc.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+url.workspace = true
+uuid.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_System_Pipes"] }
+
+[dev-dependencies]
+tempfile.workspace = true

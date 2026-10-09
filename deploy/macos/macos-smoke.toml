@@ -1,0 +1,38 @@
+schema_version = 1
+source_root_id = "09a5f79b-96e7-47be-a022-92a6c0101210"
+workspace = "pipeline"
+stages = ["generate", "consume"]
+max_parallel_jobs = 1
+
+[[jobs]]
+name = "generate"
+stage = "generate"
+runner = { os = "macos", arch = "aarch64", pool = "default" }
+shell = "sh"
+timeout_seconds = 60
+script = [
+  'test "$(id -u)" = 10003',
+  'test -f Server/Cargo.toml',
+  'test ! -r /Library/P4Forge/secrets/agent-token',
+  'test ! -r /Library/P4Forge/secrets/p4tickets',
+  'test ! -w ..',
+  'test -z "${P4TICKETS+x}${P4FORGE_AGENT_TOKEN_FILE+x}${GOOGLE_CLIENT_SECRET+x}"',
+  'rustc --version; cargo --version',
+  'printf "%s" "$P4FORGE_CHANGELIST" > generated-smoke.txt',
+  'printf "%s" "$P4FORGE_RUN_ID" > "$HOME/shared-home.txt"',
+  '''/usr/bin/python3 -c 'import os,time; pid=os.fork(); (os.setsid(),time.sleep(90)) if pid==0 else open(os.environ["HOME"]+"/detached-pid","w").write(str(pid))' ''',
+  'echo "generate and credential isolation verified"',
+]
+
+[[jobs]]
+name = "consume"
+stage = "consume"
+runner = { os = "macos", arch = "aarch64", pool = "default" }
+shell = "sh"
+timeout_seconds = 60
+script = [
+  'test "$(cat generated-smoke.txt)" = "$P4FORGE_CHANGELIST"',
+  'test "$(cat "$HOME/shared-home.txt")" = "$P4FORGE_RUN_ID"',
+  '! kill -0 "$(cat "$HOME/detached-pid")" 2>/dev/null',
+  'echo "shared checkout, HOME and detached process cleanup verified"',
+]

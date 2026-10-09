@@ -1,0 +1,31 @@
+schema_version = 1
+source_root_id = "SOURCE_ROOT_UUID"
+workspace = "pipeline"
+stages = ["generate", "consume"]
+max_parallel_jobs = 1
+
+[[jobs]]
+name = "generate"
+stage = "generate"
+runner = { os = "windows", arch = "x86_64", pool = "default" }
+shell = "power_shell"
+working_directory = "."
+timeout_seconds = 60
+script = [
+  'if (-not (Test-Path Server/Cargo.toml)) { throw "root source missing" }',
+  'Set-Content -Path generated-smoke.txt -Value "CL=$env:P4FORGE_CHANGELIST"',
+  'Write-Output "generate complete"',
+]
+
+[[jobs]]
+name = "consume"
+stage = "consume"
+runner = { os = "windows", arch = "x86_64", pool = "default" }
+shell = "power_shell"
+working_directory = "."
+timeout_seconds = 60
+script = [
+  'if ((Get-Content generated-smoke.txt) -ne "CL=$env:P4FORGE_CHANGELIST") { throw "shared workspace lost" }',
+  'if ($env:P4TICKETS -or $env:P4FORGE_AGENT_TOKEN_FILE) { throw "credential environment leaked" }',
+  'Write-Output "shared workspace verified"',
+]

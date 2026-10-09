@@ -1,0 +1,32 @@
+name: p4forge
+services:
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: p4forge
+      POSTGRES_PASSWORD: ${P4FORGE_DB_PASSWORD:-p4forge-local-only}
+      POSTGRES_DB: p4forge
+    ports:
+      - "127.0.0.1:${P4FORGE_DB_PORT:-15432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U p4forge -d p4forge"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  perforce:
+    hostname: p4forge-perforce
+    image: p4forge-perforce:2026.1
+    build:
+      context: .
+      dockerfile: deploy/perforce.Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${P4FORGE_P4_BIND:-127.0.0.1}:${P4FORGE_P4_PORT:-16660}:1666"
+    volumes:
+      - perforce_data:/data
+volumes:
+  postgres_data:
+  perforce_data:

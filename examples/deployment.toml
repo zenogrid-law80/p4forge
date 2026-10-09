@@ -1,0 +1,27 @@
+schema_version = 1
+source_root_id = "00000000-0000-0000-0000-000000000001"
+workspace = "pipeline"
+max_parallel_jobs = 1
+stages = ["deploy", "health"]
+artifact_inputs = ["output.bin"]
+
+# Create an environment bound to this pipeline, then use its UUID here.
+[deployment]
+environment_id = "00000000-0000-0000-0000-000000000002"
+health_check = "health-check"
+
+# Isolated workspace rehearsal. Replace these steps with reviewed deployment and
+# target-service checks before connecting a real host; this does not deploy a service.
+[[jobs]]
+name = "stage-release"
+stage = "deploy"
+shell = "sh"
+runner = { os = "linux", arch = "x86_64" }
+script = ["mkdir release", "cp \"$P4FORGE_INPUTS/output.bin\" release/output.bin"]
+
+[[jobs]]
+name = "health-check"
+stage = "health"
+shell = "sh"
+runner = { os = "linux", arch = "x86_64" }
+script = ["cmp \"$P4FORGE_INPUTS/output.bin\" release/output.bin", "test -s release/output.bin"]

@@ -1,0 +1,26 @@
+# Integration tests create isolated SQLx databases; they never seed the service DB.
+services:
+  tests:
+    profiles: [test]
+    build:
+      context: .
+      dockerfile: deploy/server.Dockerfile
+      target: test
+    image: p4forge-tests:0.1.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      perforce:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${P4FORGE_DOCKER_DATABASE_URL:-postgres://p4forge:p4forge-local-only@postgres:5432/p4forge}
+      P4FORGE_TEST_P4PORT: perforce:1666
+      P4FORGE_TEST_P4_TICKETS_FILE: /run/secrets/p4tickets
+    secrets: [p4tickets]
+    init: true
+    cap_drop: [ALL]
+    cap_add: [SETUID, SETGID, KILL, CHOWN, DAC_OVERRIDE]
+    security_opt: [no-new-privileges:true]
+secrets:
+  p4tickets:
+    file: .local/p4tickets

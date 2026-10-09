@@ -1,0 +1,35 @@
+# Add this file to compose.yaml + compose.server.yaml for a dedicated Linux agent.
+services:
+  agent:
+    profiles: [agent]
+    build:
+      context: .
+      dockerfile: deploy/server.Dockerfile
+      target: agent
+    image: p4forge-agent:0.1.0
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 45s
+    environment:
+      P4FORGE_SERVER_URL: ${P4FORGE_PUBLIC_URL:-https://p4forge.zenogrid.co.kr:8444/}
+      P4FORGE_AGENT_TOKEN_FILE: /run/secrets/agent_token
+      P4FORGE_P4_TICKETS_FILE: /p4-credentials/p4tickets
+    secrets: [agent_token]
+    volumes:
+      - server_tickets:/p4-credentials:ro
+      - agent_state:/state
+    tmpfs:
+      - /work:rw,nosuid,nodev,size=2g,mode=755
+      - /tmp:rw,nosuid,nodev,size=128m
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [SETUID, SETGID, KILL, CHOWN, DAC_OVERRIDE]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 1g
+    cpus: 2
+secrets:
+  agent_token:
+    file: .local/agent-token
+volumes:
+  agent_state:

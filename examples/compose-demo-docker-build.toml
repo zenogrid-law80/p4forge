@@ -1,0 +1,24 @@
+# Replace with a Perforce View mapping //streams/root/Server/... to ...
+schema_version = 1
+source_root_id = "00000000-0000-0000-0000-000000000001"
+workspace = "pipeline"
+max_parallel_jobs = 1
+stages = ["build"]
+artifacts = [{ name = "docker-image.json", path = ".p4forge/docker-image.json" }]
+
+[[jobs]]
+name = "docker-build"
+stage = "build"
+shell = "sh"
+timeout_seconds = 1800
+runner = { os = "macos", arch = "aarch64", pool = "compose-demo", docker = "linux" }
+script = ["p4forge-docker:build"]
+
+# Values are validated Docker options, not exported host environment variables.
+[jobs.environment]
+BUILD_CONTEXT = "."
+BUILD_DOCKERFILE = "Dockerfile"
+BUILD_PLATFORM = "linux/amd64"
+BUILD_IMAGE = "server"
+# Optional multi-stage target:
+# BUILD_TARGET = "builder"

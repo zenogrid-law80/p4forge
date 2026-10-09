@@ -1,0 +1,53 @@
+http:
+  routers:
+    p4forge-deployment-demo:
+      rule: "Host(`p4forge.zenogrid.co.kr`) && (Path(`/deployment-demo`) || PathPrefix(`/deployment-demo/`))"
+      priority: 150
+      entryPoints: [websecure]
+      service: p4forge-deployment-demo
+      middlewares: [security, deployment-demo-prefix]
+      tls:
+        certResolver: cloudflare
+    p4forge-downloads:
+      rule: "Host(`p4forge.zenogrid.co.kr`) && PathPrefix(`/downloads/`)"
+      priority: 100
+      entryPoints: [websecure]
+      service: p4forge-downloads
+      middlewares: [security]
+      tls:
+        certResolver: cloudflare
+    p4forge:
+      rule: "Host(`p4forge.zenogrid.co.kr`)"
+      entryPoints: [websecure]
+      service: p4forge
+      middlewares: [security]
+      tls:
+        certResolver: cloudflare
+        domains:
+          - main: p4forge.zenogrid.co.kr
+  services:
+    p4forge-deployment-demo:
+      loadBalancer:
+        servers:
+          - url: http://p4forge-deployment-demo:8080
+    p4forge-downloads:
+      loadBalancer:
+        servers:
+          - url: http://downloads:8080
+    p4forge:
+      loadBalancer:
+        servers:
+          - url: http://server:8088
+  middlewares:
+    deployment-demo-prefix:
+      stripPrefix:
+        prefixes: [/deployment-demo]
+    security:
+      headers:
+        stsSeconds: 31536000
+        contentTypeNosniff: true
+        frameDeny: true
+tls:
+  options:
+    default:
+      minVersion: VersionTLS12

@@ -1,0 +1,28 @@
+# Replace source and environment UUIDs with the approved project bindings.
+schema_version = 1
+source_root_id = "00000000-0000-0000-0000-000000000001"
+workspace = "pipeline"
+max_parallel_jobs = 1
+stages = ["apply", "health"]
+artifact_inputs = ["demo-release.json"]
+
+[deployment]
+environment_id = "00000000-0000-0000-0000-000000000002"
+health_check = "compose-health"
+
+# These identifiers are interpreted by the dedicated executor, never as shell.
+[[jobs]]
+name = "compose-apply"
+stage = "apply"
+shell = "sh"
+timeout_seconds = 120
+runner = { os = "macos", arch = "aarch64", pool = "compose-demo" }
+script = ["p4forge-compose-demo:apply"]
+
+[[jobs]]
+name = "compose-health"
+stage = "health"
+shell = "sh"
+timeout_seconds = 60
+runner = { os = "macos", arch = "aarch64", pool = "compose-demo" }
+script = ["p4forge-compose-demo:health"]

@@ -1,0 +1,12 @@
+{
+  "name": "p4forge-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --project web/tsconfig.json",
+    "test:web": "npm run build && node --test web/*.test.mjs"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}

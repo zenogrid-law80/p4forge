@@ -1,0 +1,29 @@
+name: p4forge-deployment-demo
+services:
+  test-service:
+    image: nginx@sha256:a8b39bd9cf0f83869a2162827a0caf6137ddf759d50a171451b335cecc87d236
+    entrypoint: [nginx, -g, "daemon off;"]
+    user: "101:101"
+    restart: unless-stopped
+    volumes:
+      - ./deploy/test-service/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ${P4FORGE_DEMO_RELEASE_DIR:?Use deploy/test-service/manage.py}:/srv/release:ro
+    networks:
+      proxy:
+        aliases: [p4forge-deployment-demo]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 32
+    mem_limit: 64m
+    cpus: 0.25
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/healthz]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+networks:
+  proxy:
+    external: true
+    name: p4forge_default

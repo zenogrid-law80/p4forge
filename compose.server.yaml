@@ -1,0 +1,109 @@
+# Use with compose.yaml. Server and TLS are explicit profiles.
+services:
+  server:
+    profiles: [server, tls]
+    build:
+      context: .
+      dockerfile: deploy/server.Dockerfile
+      target: server
+    image: p4forge-server:0.1.0
+    restart: unless-stopped
+    depends_on:
+      ticket-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      perforce:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${P4FORGE_DOCKER_DATABASE_URL:-postgres://p4forge:p4forge-local-only@postgres:5432/p4forge}
+      P4FORGE_PUBLIC_URL: ${P4FORGE_PUBLIC_URL:-https://p4forge.zenogrid.co.kr:8444/}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      P4FORGE_BOOTSTRAP_ADMIN: ${P4FORGE_BOOTSTRAP_ADMIN:-law80@zenogrid.co.kr}
+      P4FORGE_ARTIFACT_DIR: /var/lib/p4forge/artifacts
+      P4FORGE_P4_TICKETS_FILE: /p4-credentials/p4tickets
+      RUST_LOG: p4forge_server=info,tower_http=info
+    ports:
+      - "127.0.0.1:8088:8088"
+    volumes:
+      - server_tickets:/p4-credentials:ro
+      - server_artifacts:/var/lib/p4forge/artifacts
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+  downloads:
+    profiles: [tls]
+    image: nginx:1.28-alpine
+    entrypoint: [nginx, -g, "daemon off;"]
+    user: "101:101"
+    restart: unless-stopped
+    volumes:
+      - ./deploy/downloads.nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./.local/downloads:/srv/downloads:ro
+      - windows_install_bundle:/private:ro
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  windows-install-init:
+    profiles: [windows-enrollment]
+    image: debian:bookworm-slim
+    network_mode: none
+    command: [sh, -c, "cp /run/secrets/windows_install_bundle /private/p4forge-desktop-6n6u52l-setup.zip.next && chmod 400 /private/p4forge-desktop-6n6u52l-setup.zip.next && chown 101:101 /private/p4forge-desktop-6n6u52l-setup.zip.next && mv /private/p4forge-desktop-6n6u52l-setup.zip.next /private/p4forge-desktop-6n6u52l-setup.zip"]
+    secrets: [windows_install_bundle]
+    volumes:
+      - windows_install_bundle:/private
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE]
+    security_opt: [no-new-privileges:true]
+  ticket-init:
+    profiles: [server, tls]
+    image: debian:bookworm-slim
+    network_mode: none
+    command: [sh, -c, "rm -f /credentials/p4tickets.next && cp /run/secrets/p4tickets /credentials/p4tickets.next && chmod 600 /credentials/p4tickets.next && chown 10002:10002 /credentials/p4tickets.next && mv /credentials/p4tickets.next /credentials/p4tickets"]
+    secrets: [p4tickets]
+    volumes:
+      - server_tickets:/credentials
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE]
+    security_opt: [no-new-privileges:true]
+  tls:
+    profiles: [tls]
+    image: traefik:v3.7.14
+    restart: unless-stopped
+    depends_on:
+      server:
+        condition: service_healthy
+    command:
+      - --entrypoints.websecure.address=:8444
+      - --providers.file.filename=/etc/traefik/dynamic.yaml
+      - --certificatesresolvers.cloudflare.acme.email=${ACME_EMAIL:-law80@zenogrid.co.kr}
+      - --certificatesresolvers.cloudflare.acme.storage=/certificates/acme.json
+      - --certificatesresolvers.cloudflare.acme.caserver=${ACME_CA_SERVER:-https://acme-v02.api.letsencrypt.org/directory}
+      - --certificatesresolvers.cloudflare.acme.dnschallenge.provider=cloudflare
+      - --certificatesresolvers.cloudflare.acme.dnschallenge.resolvers=1.1.1.1:53,8.8.8.8:53
+      - --log.level=INFO
+    environment:
+      # Lego expects CF_DNS_API_TOKEN; only the TLS container receives this token.
+      CF_DNS_API_TOKEN: ${CF_API_TOKEN:-}
+    ports:
+      - "${P4FORGE_TLS_BIND:-127.0.0.1}:8444:8444"
+    volumes:
+      - ./deploy/traefik.dynamic.yaml:/etc/traefik/dynamic.yaml:ro
+      - certificates:/certificates
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+secrets:
+  windows_install_bundle:
+    file: .local/enrollment/p4forge-desktop-6n6u52l-setup.zip
+  p4tickets:
+    file: .local/p4tickets
+volumes:
+  windows_install_bundle:
+  certificates:
+  server_tickets:
+  server_artifacts:

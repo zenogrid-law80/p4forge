@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>kr.co.zenogrid.p4forge.agent</string>
+  <key>ProgramArguments</key><array>
+    <string>/Library/P4Forge/bin/p4forge-agent</string>
+    <string>--server</string><string>https://p4forge.zenogrid.co.kr:8444/</string>
+    <string>--token-file</string><string>/Library/P4Forge/secrets/agent-token</string>
+    <string>--tickets-file</string><string>/Library/P4Forge/secrets/p4tickets</string>
+    <string>--p4-bin</string><string>/Library/P4Forge/bin/p4</string>
+    <string>--work-dir</string><string>/Library/P4Forge/work</string>
+    <string>--state-dir</string><string>/Library/P4Forge/state</string>
+    <string>--log-file</string><string>/Library/P4Forge/logs/agent.log</string>
+  </array>
+  <key>UserName</key><string>root</string>
+  <key>GroupName</key><string>wheel</string>
+  <key>WorkingDirectory</key><string>/Library/P4Forge</string>
+  <key>EnvironmentVariables</key><dict><key>PATH</key><string>/usr/bin:/bin:/usr/sbin:/sbin</string></dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>5</integer>
+  <key>ProcessType</key><string>Background</string>
+  <key>ExitTimeOut</key><integer>20</integer>
+  <key>Umask</key><integer>18</integer>
+  <key>StandardOutPath</key><string>/Library/P4Forge/logs/launchd.log</string>
+  <key>StandardErrorPath</key><string>/Library/P4Forge/logs/launchd.log</string>
+</dict></plist>

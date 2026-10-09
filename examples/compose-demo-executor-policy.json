@@ -1,0 +1,11 @@
+{
+  "project_id": "00000000-0000-0000-0000-000000000001",
+  "pipeline_id": "00000000-0000-0000-0000-000000000002",
+  "environment_id": "00000000-0000-0000-0000-000000000003",
+  "docker_build": {
+    "helper": "/absolute/path/to/executor/bin/p4forge-checkout",
+    "p4_binary": "/opt/homebrew/bin/p4",
+    "connection": {"port": "perforce.example.com:1666", "user": "reader", "charset": "utf8"},
+    "server_id": "your-perforce-server-id"
+  }
+}
